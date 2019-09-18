@@ -89,7 +89,7 @@ class PointNetfeat(nn.Module):
         super(PointNetfeat, self).__init__()
         self.extra_dims = extra_dims
         self.n_dims = n_dims
-        self.stn = STN3d()
+        self.stn = STNkd(k = self.n_dims - self.extra_dims)
         self.conv1 = torch.nn.Conv1d(3, 64, 1)
         self.conv2 = torch.nn.Conv1d(64 + self.extra_dims, 128, 1)
         self.conv3 = torch.nn.Conv1d(128, 1024, 1)
@@ -137,11 +137,12 @@ class PointNetfeat(nn.Module):
             return torch.cat([x, pointfeat], 1), trans, trans_feat
 
 class PointNetCls(nn.Module):
-    def __init__(self, k=2, feature_transform=False, n_dims = 3, extra_dims = 0):
+    def __init__(self, k=2, feature_transform=False, n_dims = 3, extra_dims = 0, dropout_rate = 0.3):
         super(PointNetCls, self).__init__()
 
         self.extra_dims = extra_dims
         self.n_dims = n_dims
+        self.dropout_rate = dropout_rate
 
         self.feature_transform = feature_transform
 
@@ -150,7 +151,7 @@ class PointNetCls(nn.Module):
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, k)
-        self.dropout = nn.Dropout(p=0.3)
+        self.dropout = nn.Dropout(p=self.dropout_rate)
         self.bn1 = nn.BatchNorm1d(512)
         self.bn2 = nn.BatchNorm1d(256)
         self.relu = nn.ReLU()
