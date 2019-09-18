@@ -38,7 +38,7 @@ class STN3d(nn.Module):
         x = F.relu(self.bn5(self.fc2(x)))
         x = self.fc3(x)
 
-        iden = Variable(torch.from_numpy(np.array([1,0,0,0,1,0,0,0,1]).astype(np.float32))).view(1,9).repeat(batchsize,1)
+        iden = Variable(torch.from_numpy(np.array([1,0,0,0,1,0,0,0,1]).astype(np.double))).view(1,9).repeat(batchsize,1)
         if x.is_cuda:
             iden = iden.cuda()
         x = x + iden
@@ -77,7 +77,7 @@ class STNkd(nn.Module):
         x = F.relu(self.bn5(self.fc2(x)))
         x = self.fc3(x)
 
-        iden = Variable(torch.from_numpy(np.eye(self.k).flatten().astype(np.float32))).view(1,self.k*self.k).repeat(batchsize,1)
+        iden = Variable(torch.from_numpy(np.eye(self.k).flatten().astype(np.double))).view(1,self.k*self.k).repeat(batchsize,1)
         if x.is_cuda:
             iden = iden.cuda()
         x = x + iden
@@ -85,11 +85,13 @@ class STNkd(nn.Module):
         return x
 
 class PointNetfeat(nn.Module):
-    def __init__(self, global_feat = True, feature_transform = False):
+    def __init__(self, global_feat = True, feature_transform = False, n_dims = 3, extra_dims = 0):
         super(PointNetfeat, self).__init__()
+        self.extra_dims = extra_dims
+        self.n_dims = n_dims
         self.stn = STN3d()
         self.conv1 = torch.nn.Conv1d(3, 64, 1)
-        self.conv2 = torch.nn.Conv1d(64, 128, 1)
+        self.conv2 = torch.nn.Conv1d(64 + self.extra_dims, 128, 1)
         self.conv3 = torch.nn.Conv1d(128, 1024, 1)
         self.bn1 = nn.BatchNorm1d(64)
         self.bn2 = nn.BatchNorm1d(128)
@@ -101,6 +103,12 @@ class PointNetfeat(nn.Module):
 
     def forward(self, x):
         n_pts = x.size()[2]
+
+        num_dims = x.size()[1]
+        x, extra_features = torch.split(x, [num_dims - self.extra_dims, self.extra_dims], dim = 1)
+        x = x.double()
+        extra_features = extra_features.double()
+
         trans = self.stn(x)
         x = x.transpose(2, 1)
         x = torch.bmm(x, trans)
@@ -115,6 +123,8 @@ class PointNetfeat(nn.Module):
         else:
             trans_feat = None
 
+        x = torch.cat([x, extra_features], 1)
+
         pointfeat = x
         x = F.relu(self.bn2(self.conv2(x)))
         x = self.bn3(self.conv3(x))
@@ -127,10 +137,16 @@ class PointNetfeat(nn.Module):
             return torch.cat([x, pointfeat], 1), trans, trans_feat
 
 class PointNetCls(nn.Module):
-    def __init__(self, k=2, feature_transform=False):
+    def __init__(self, k=2, feature_transform=False, n_dims = 3, extra_dims = 0):
         super(PointNetCls, self).__init__()
+
+        self.extra_dims = extra_dims
+        self.n_dims = n_dims
+
         self.feature_transform = feature_transform
-        self.feat = PointNetfeat(global_feat=True, feature_transform=feature_transform)
+
+        self.feat = PointNetfeat(global_feat=True, feature_transform=feature_transform, n_dims = self.n_dims, extra_dims = self.extra_dims)
+
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, k)
@@ -146,8 +162,8 @@ class PointNetCls(nn.Module):
         x = self.fc3(x)
         return F.log_softmax(x, dim=1), trans, trans_feat
 
-
 class PointNetDenseCls(nn.Module):
+
     def __init__(self, k = 2, feature_transform=False):
         super(PointNetDenseCls, self).__init__()
         self.k = k
@@ -177,7 +193,7 @@ class PointNetDenseCls(nn.Module):
 def feature_transform_regularizer(trans):
     d = trans.size()[1]
     batchsize = trans.size()[0]
-    I = torch.eye(d)[None, :, :]
+    I = torch.eye(d)[None, :, :].double()
     if trans.is_cuda:
         I = I.cuda()
     loss = torch.mean(torch.norm(torch.bmm(trans, trans.transpose(2,1)) - I, dim=(1,2)))
@@ -211,3 +227,4 @@ if __name__ == '__main__':
     seg = PointNetDenseCls(k = 3)
     out, _, _ = seg(sim_data)
     print('seg', out.size())
+
