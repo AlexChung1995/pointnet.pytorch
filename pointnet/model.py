@@ -159,7 +159,7 @@ class PointNetCls(nn.Module):
     def forward(self, x):
         x, trans, trans_feat = self.feat(x)
         x = F.relu(self.bn1(self.fc1(x)))
-        x = F.relu(self.bn2(self.dropout(self.fc2(x))))
+        x = F.relu(self.bn2(F.dropout(self.fc2(x), p = self.dropout_rate, training = self.training)))
         x = self.fc3(x)
         return F.log_softmax(x, dim=1), trans, trans_feat
 
