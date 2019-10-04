@@ -90,7 +90,7 @@ class PointNetfeat(nn.Module):
         self.extra_dims = extra_dims
         self.n_dims = n_dims
         self.stn = STNkd(k = self.n_dims - self.extra_dims)
-        self.conv1 = torch.nn.Conv1d(3, 64, 1)
+        self.conv1 = torch.nn.Conv1d(self.n_dims - self.extra_dims, 64, 1)
         self.conv2 = torch.nn.Conv1d(64 + self.extra_dims, 128, 1)
         self.conv3 = torch.nn.Conv1d(128, 1024, 1)
         self.bn1 = nn.BatchNorm1d(64)
