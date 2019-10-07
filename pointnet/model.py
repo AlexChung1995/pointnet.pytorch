@@ -85,7 +85,7 @@ class STNkd(nn.Module):
         return x
 
 class PointNetfeat(nn.Module):
-    def __init__(self, global_feat = True, feature_transform = False, n_dims = 3, extra_dims = 0):
+    def __init__(self, global_feat = True, feature_transform = False, n_dims = 3, extra_dims = 0, cat_after_fstn = True):
         super(PointNetfeat, self).__init__()
         self.extra_dims = extra_dims
         self.n_dims = n_dims
@@ -98,8 +98,12 @@ class PointNetfeat(nn.Module):
         self.bn3 = nn.BatchNorm1d(1024)
         self.global_feat = global_feat
         self.feature_transform = feature_transform
+        self.cat_after_fstn = cat_after_fstn
         if self.feature_transform:
-            self.fstn = STNkd(k=64)
+            k = 64
+            if not cat_after_fstn:
+                k = 64 + self.extra_dims
+            self.fstn = STNkd(k=k)
 
     def forward(self, x):
         n_pts = x.size()[2]
@@ -114,7 +118,10 @@ class PointNetfeat(nn.Module):
         x = torch.bmm(x, trans)
         x = x.transpose(2, 1)
         x = F.relu(self.bn1(self.conv1(x)))
-
+        
+        if not self.cat_after_fstn:
+            x = torch.cat([x, extra_features], 1)
+        
         if self.feature_transform:
             trans_feat = self.fstn(x)
             x = x.transpose(2,1)
@@ -122,8 +129,9 @@ class PointNetfeat(nn.Module):
             x = x.transpose(2,1)
         else:
             trans_feat = None
-
-        x = torch.cat([x, extra_features], 1)
+            
+        if self.cat_after_fstn:
+            x = torch.cat([x, extra_features], 1)
 
         pointfeat = x
         x = F.relu(self.bn2(self.conv2(x)))
